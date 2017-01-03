@@ -1,0 +1,38 @@
+ public static void PersistUserDashboardsInfo(List<DashboardInfo> dashboardsInfo)
+        {
+            using (var connection = Amphora.FleeTime.Core.DataLayer.Database.GetRepositoryConnection() as OdbcConnection)
+            {
+                connection.Open();
+                var transaction = connection.BeginTransaction();
+                try
+                {
+                    var delCmd = connection.CreateCommand();
+                    delCmd.Transaction = transaction;
+                    delCmd.CommandText = "DELETE FROM APPLAUNCHER_USER_DASHBOARDS WHERE user_init = ?" + string.Format(STR_SQL_PRODUCT_APPLAUNCHER_USER_DASHBOARDS, Program.Product);
+
+                    delCmd.Parameters.Add(new OdbcParameter() { ParameterName = "@user_init", OdbcType = OdbcType.VarChar, Size = 3, Value = SymphonyIdentity.Current.User.Initials });
+
+                    delCmd.ExecuteNonQuery();
+
+                    foreach (var item in dashboardsInfo.Where(x => x != null))
+                    {
+                        var sqlCmd = connection.CreateCommand();
+                        sqlCmd.Transaction = transaction;
+                        sqlCmd.CommandText = @"INSERT INTO APPLAUNCHER_USER_DASHBOARDS (product, user_init, filename, position, enabled)
+                                                VALUES (?, ?, ?, ?, 1)";
+                        sqlCmd.Parameters.Add(new OdbcParameter() { ParameterName = "@product", SourceColumn = "product", OdbcType = OdbcType.NVarChar, Size = 50, Value = (object)Program.Product ?? DBNull.Value });
+                        sqlCmd.Parameters.Add(new OdbcParameter() { ParameterName = "@user_init", SourceColumn = "user_init", OdbcType = OdbcType.Char, Size = 3, Value = (object)SymphonyIdentity.Current.User.Initials ?? DBNull.Value });
+                        sqlCmd.Parameters.Add(new OdbcParameter() { ParameterName = "@filename", SourceColumn = "filename", OdbcType = OdbcType.NVarChar, Size = 50, Value = (object)Path.GetFileName(item.File) ?? DBNull.Value });
+                        sqlCmd.Parameters.Add(new OdbcParameter() { ParameterName = "@position", SourceColumn = "position", OdbcType = OdbcType.Int, Size = 10, Value = (object)item.Position ?? DBNull.Value });
+
+                        sqlCmd.ExecuteNonQuery();
+                    }
+
+                    transaction.Commit();
+                }
+                catch (Exception)
+                {
+                    transaction.Rollback();
+                }
+            }
+        }
